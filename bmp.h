@@ -61,6 +61,14 @@ DWORD* getIntegralImage(BYTE* ramIntensity, int width, int height);
 int getTotal(const DWORD* const integralImage, int x, int y, int lastX, int lastY, int width, int height);
 /* Haar */
 int* haarCascade(int hModel, int size, const DWORD* const integralImage, int width, int height);
+int* haarFeature(int hModel, int kHeight, int kWidth, const DWORD* const integralImage, int width, int height);
+/* Blur */
+BYTE* blurMean(const BYTE* const noise, int widthN, int heightN);
+BYTE* blurGaussian(const BYTE* const noised, int widthN, int heightN);
+BYTE* blurMedian(const BYTE* const noised, int widthN, int heightN);
+BYTE getMiddle(const BYTE* const p1, const BYTE* const p2, const BYTE* const p3);
+/* thresHold */
+int thresHold(const BYTE* const ramIntensity, int width, int height);
 /* For Debug */
 void printStructers(BITMAPFILEHEADER h, BITMAPINFOHEADER i);
 

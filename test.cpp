@@ -18,8 +18,11 @@ using namespace std;
 #endif
 
 #define DRAW_TESTS 0
-#define INTEGRAL_TEST 1
-#define HAAR_TEST 1
+#define INTEGRAL_TEST 0
+#define HAAR_TEST 0
+#define HAAR_F_TEST 0
+#define NOISE_MASK 0
+#define THRESHOLD 1
 
 int main(int argc, char *argv[])
 {
@@ -79,9 +82,51 @@ int main(int argc, char *argv[])
         dout << i << " - Calculate haarCascade time: " << (stop_c    - start_c) / double(CLOCKS_PER_SEC) << endl << endl;        
     }
 #endif /* HAAR_TEST */
+#if HAAR_F_TEST
+    start_c = clock();
+    int* result = haarFeature(1, 1, 1, integralImage, width, height);
+    stop_c = clock();
+
+    dout << 1 << " - Calculate haarFeature time: " << (stop_c    - start_c) / double(CLOCKS_PER_SEC) << endl << endl;       
+
+#endif /* HAAR_F_TEST */
+
     delete[] integralImage;
 #endif /* INTEGRAL_TEST */
 
+#if NOISE_MASK
+    int widthN = 220, heightN = 220;
+    BYTE* noised = new BYTE[ widthN * heightN ];
+    
+    int i, j;
+    const char* filePathFace = "images/lenaFace.bmp";
+    const char* filePathMean = "images/mean.bmp";
+    const char* filePathMedian = "images/median.bmp";
+    const char* filePathGaussian = "images/gaussian.bmp";
+
+    for(i = 0; i < heightN; i++){
+        for(j = 0; j < widthN; j++){
+            *(noised + i * widthN + j) = *(ramIntensity + ((190 + i) * width) + j + 180);
+        }
+    }
+    saveBMP(filePathFace, heightN, widthN, convertIntensityToBMP(noised, widthN, heightN, &size));
+    saveBMP(filePathMean, heightN, widthN, convertIntensityToBMP(blurMean(noised, widthN, heightN), widthN, heightN, &size));
+    saveBMP(filePathGaussian, heightN, widthN, convertIntensityToBMP(blurGaussian(noised, widthN, heightN), widthN, heightN, &size));
+    saveBMP(filePathMedian, heightN, widthN, convertIntensityToBMP(blurMedian(noised, widthN, heightN), widthN, heightN, &size));
+
+    delete [] noised;
+#endif /* NOISE_MASK */
+
+#if THRESHOLD
+    int tHold = thresHold(ramIntensity, width, height);
+    int i;
+    const char* filePathBinary = "images/binary.bmp";
+
+    for(i = 0; i < width*height; i++){
+        *(ramIntensity + i) = *(ramIntensity + i) > tHold ? 255 : 0; 
+    }
+    saveBMP(filePathBinary, height, width, convertIntensityToBMP(ramIntensity, width, height, &size));
+#endif /* THRESHOLD */
 #if DRAW_TESTS    
     int centerX = 300;
     int centerY = 290;

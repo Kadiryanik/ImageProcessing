@@ -329,7 +329,7 @@ DWORD* getIntegralImage(BYTE* ramIntensity, int width, int height){
     DWORD* integralImage = new DWORD[(width + 1) * (height + 1)];
     
     int i,j;
-    memset(integralImage, 0, sizeof (integralImage));
+    memset(integralImage, 0, (width + 1) * (height + 1) * sizeof(DWORD));
  
     for(i = 0; i < height; i++){
         for(j = 0; j < width; j++){
@@ -522,6 +522,153 @@ int* haarCascade(int hModel, int size, const DWORD* const integralImage, int wid
         cout << "Undefined HAAR_MODEL" << endl;
         return NULL;
     }
+}
+/*--------------------------------------------------------------------------------------*/
+int* haarFeature(int hModel, int kHeight, int kWidth, const DWORD* const integralImage, int width, int height){
+    if(hModel == HAAR_MODEL_1){
+        int h = 1 * kHeight;  // height
+        int w = 2 * kWidth;   // width
+
+        h--; w--;
+
+        int* result = new int[ (width - w) * (height - h) ];
+        
+        int sum, i, j;
+        
+        for(i = 0; i < height - h; i++){
+            for (j = 0; j < width - w; j++){
+                sum = 0;
+
+                /* leftArea */
+                sum = getTotal(integralImage, i, j, i + h, (j + (w / 2)), width, height);
+                /* rightArea */
+                sum -= getTotal(integralImage, i, (j + (w / 2)) + 1, i + h, j + w, width, height);
+
+                *(result + ((width - w) * i) + j) = sum;
+            }
+        }
+#if DEBUG > 1
+        for(i = 0; i < PRINTSIZE; i++){
+            for(j = 0; j < PRINTSIZE; j++){
+                dout << setw (5) << *(result + i * (width - w) + j) << " ";
+            }
+            dout << endl;
+        }
+#endif /* DEBUG > 1 */
+        return result;
+    }
+}
+/*--------------------------------------------------------------------------------------*/
+BYTE* blurMean(const BYTE* const noised, int widthN, int heightN){
+    //int *mean = new int[3 * 3];
+    //memset(mean, 1, 9 * sizeof(int));
+    BYTE* blured = new BYTE[ widthN * heightN ];
+    memset(blured, 0, widthN * heightN);
+    
+    int i, j;
+    for(i = 0; i < heightN - 3; i++){
+        for(j = 0; j < widthN - 3; j++){
+            *(blured + ((i + 1) * widthN) + j + 1) = (*(noised + i * widthN + j) 
+                                                        + *(noised + i * widthN + j + 1) 
+                                                        + *(noised + i * widthN + j + 2)
+                                                    + *(noised + ((i + 1) * widthN) + j) 
+                                                        + *(noised + ((i + 1) * widthN ) + j + 1) 
+                                                        + *(noised + ((i + 1) * widthN) + j + 2)
+                                                    + *(noised + ((i + 2) * widthN) + j) 
+                                                        + *(noised + ((i + 2) * widthN) + j + 1) 
+                                                        + *(noised + ((i + 2) * widthN) + j + 2)) / 9;
+        }
+    }
+    return blured;
+}
+/*--------------------------------------------------------------------------------------*/
+BYTE* blurGaussian(const BYTE* const noised, int widthN, int heightN){
+    int *gaussian = new int[3 * 3];
+    *(gaussian) = 2;
+    *(gaussian + 1) = 1;
+    *(gaussian + 2) = 2;
+    *(gaussian + 3) = 1;
+    *(gaussian + 4) = 0;
+    *(gaussian + 5) = 1;
+    *(gaussian + 6) = 2;
+    *(gaussian + 7) = 1;
+    *(gaussian + 8) = 2;
+
+    BYTE* blured = new BYTE[ widthN * heightN ];
+    memset(blured, 0, widthN * heightN);
+
+    int i, j;
+    for(i = 0; i < heightN - 3; i++){
+        for(j = 0; j < widthN - 3; j++){
+            *(blured + ((i + 1) * widthN) + j + 1) = ((*(noised + i * widthN + j) >> *(gaussian))
+                                                        + (*(noised + i * widthN + j + 1) >> *(gaussian + 1))
+                                                        + (*(noised + i * widthN + j + 2) >> *(gaussian + 2))
+                                                    + (*(noised + ((i + 1) * widthN) + j) >> *(gaussian + 3))
+                                                        + (*(noised + ((i + 1) * widthN ) + j + 1) >> *(gaussian + 4))
+                                                        + (*(noised + ((i + 1) * widthN) + j + 2) >> *(gaussian + 5))
+                                                    + (*(noised + ((i + 2) * widthN) + j) >> *(gaussian + 6))
+                                                        + (*(noised + ((i + 2) * widthN) + j + 1) >> *(gaussian + 7))
+                                                        + (*(noised + ((i + 2) * widthN) + j + 2) >> *(gaussian + 8))
+                                                    ) >> 2;
+        }
+    }
+    return blured;
+}
+/*--------------------------------------------------------------------------------------*/
+BYTE* blurMedian(const BYTE* const noised, int widthN, int heightN){
+    BYTE* blured = new BYTE[ widthN * heightN ];
+    memset(blured, 0, widthN * heightN);
+
+    int i, j;
+    for(i = 0; i < heightN - 3; i++){
+        for(j = 0; j < widthN - 3; j++){
+            *(blured + ((i + 1) * widthN) + j + 1) = getMiddle(noised + i * widthN + j, 
+                                                                noised + ((i + 1) * widthN) + j, 
+                                                                noised + ((i + 2) * widthN) + j);
+        }
+    }
+    return blured;
+}
+/*--------------------------------------------------------------------------------------*/
+BYTE getMiddle(const BYTE* const p1, const BYTE* const p2, const BYTE* const p3){
+    BYTE array[9] = { 0 };
+    int i, j;
+    for(i = 0; i < 3; i++){
+        array[i] = *(p1 + i);
+        array[3+i] = *(p2 + i);
+        array[6+i] = *(p3 + i);
+    }
+    
+    for(j = 0; j < 8; j++){
+        for(i = 0; i < 8; i++){
+            if((int)array[i] >= (int)array[i + 1]){
+                BYTE temp = array[i];
+                array[i] = array[i + 1];
+                array[i + 1] = temp;
+            }
+        }
+    }
+    return array[4];
+}
+/*--------------------------------------------------------------------------------------*/
+int thresHold(const BYTE* const ramIntensity, int width, int height){
+    int* tHold = new int[ 256 ];
+    int i;
+    memset(tHold, 0, 256 * sizeof(int));
+
+    for(i = 0; i < width * height; i++){
+            tHold[(int)*(ramIntensity + i)]++;
+    }
+#if DEBUG > 1
+    for(i = 0; i < 256; i++){
+        dout << setw(13) << *(tHold + i) << ",";
+        if(i % 16 == 15){
+            dout << endl;
+        }
+    }
+    dout << endl;
+#endif /* DEBUG > 1 */
+    return 65;
 }
 /*--------------------------------------------------------------------------------------*/
 void printStructers(BITMAPFILEHEADER h, BITMAPINFOHEADER i){
