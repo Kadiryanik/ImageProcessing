@@ -4,12 +4,13 @@
 #include <ctime> //for time
 #include <iomanip> //for setw
 #include <string>
+#include <math.h>   //for fabs
 
 #include "bmp.h"
 
 using namespace std;
 
-#define DEBUG 0
+#define DEBUG 1
 #define PRINTSIZE 6
 
 #if DEBUG
@@ -25,13 +26,19 @@ using namespace std;
 #define GET_DATA 0
 
 #define NOISE_MASK_TEST 0
-#define THRESHOLD_TEST 1
+#define THRESHOLD_TEST 0
 #define DILATION_TEST 0
 #define EROSION_TEST 0
-#define REGION_TEST 0
-#define OPEN_CLOSE_FRAME_TEST 0
 
-#define THRESHOLD_K_TEST 0
+#define REGION_TEST 0
+#define WITH_EROSION 0
+
+#define OPEN_CLOSE_FRAME_TEST 0
+#define VARIANCE_TEST 0
+#define MOMENT_TEST 0
+#define LEARN_TEST 0
+#define LEARNED_TEST 0
+#define THRESHOLD_K_TEST 1
 #define RGB_TEST 0
 #define DRAW_TESTS 0
 
@@ -136,7 +143,7 @@ int main(int argc, char *argv[])
     long sizeTwo;
     ifstream fileTwo;
 
-    fileTwo.open("images/backup/test5.bmp", ios::in | ios::binary);
+    fileTwo.open("images/backup/mixeds.bmp", ios::in | ios::binary);
 
     BYTE* bufferTwo = loadBMP(&heightTwo, &widthTwo, &sizeTwo, fileTwo);
     fileTwo.close();
@@ -156,7 +163,7 @@ int main(int argc, char *argv[])
     BYTE* binaryImage = new BYTE[widthTwo * heightTwo];
 
     for(i = 0; i < widthTwo*heightTwo; i++){
-        *(binaryImage + i) = *(ramIntensityTwo + i) > tHold ? 255 : 0; 
+        *(binaryImage + i) = *(ramIntensityTwo + i) > tHold ? 255 : 0;
     }
     stop_c = clock();
     saveBMP(filePathBinary, heightTwo, widthTwo, convertIntensityToBMP(binaryImage, widthTwo, heightTwo, &sizeTwo));
@@ -165,8 +172,8 @@ int main(int argc, char *argv[])
 
 #if DILATION_TEST
     const char* filePathDilation = "images/dilation.bmp";
-    mask_t dilation(5, 5, 1);
-
+    mask_t dilation(3, 3, 1);
+    //dout << heightTwo << " " << widthTwo << endl;
     saveBMP(filePathDilation, heightTwo + dilation.height, widthTwo + dilation.width, 
                 convertIntensityToBMP(getDilation(binaryImage, widthTwo, heightTwo, &dilation), widthTwo + dilation.width, heightTwo + dilation.height, &sizeTwo));
     dout << "DILATION_TEST succed!" << endl;
@@ -174,25 +181,183 @@ int main(int argc, char *argv[])
 
 #if EROSION_TEST
     const char* filePathErosion = "images/erosion.bmp";
-    mask_t erosion(5, 5, 1);
-
+    mask_t erosion(3, 3, 1);
+    
     saveBMP(filePathErosion, heightTwo - erosion.height, widthTwo - erosion.width, 
         convertIntensityToBMP(getErosion(binaryImage, widthTwo, heightTwo, &erosion), widthTwo - erosion.width, heightTwo - erosion.height, &sizeTwo));
     dout << "EROSION_TEST succed!" << endl;
 #endif /* EROSION_TEST */
 
 #if OPEN_CLOSE_FRAME_TEST
-    const char* filePathFrame = "images/frame.bmp";
+    const char* filePathOpened = "images/opened.bmp";
+    saveBMP(filePathOpened, heightTwo, widthTwo, convertIntensityToBMP(getOpened(binaryImage, widthTwo, heightTwo, 2), widthTwo, heightTwo, &sizeTwo));
 
+    const char* filePathFrame = "images/frame.bmp";
     saveBMP(filePathFrame, heightTwo, widthTwo, convertIntensityToBMP(getFrame(binaryImage, widthTwo, heightTwo), widthTwo, heightTwo, &sizeTwo));
+
     dout << "OPEN_CLOSE_FRAME_TEST succed!" << endl;
 #endif /* OPEN_CLOSE_FRAME_TEST */
 
 #if REGION_TEST
-    saveBMP("images/regionResult.bmp", heightTwo - erosion.height, widthTwo - erosion.width, 
-        convertIntensityToBMP(regionIdentification(getErosion(binaryImage, widthTwo, heightTwo, &erosion), widthTwo - erosion.width, heightTwo - erosion.height), widthTwo - erosion.width, heightTwo - erosion.height, &size));
+    BYTE* etiketler;
+#if WITH_EROSION
+    int regionWidth = widthTwo - erosion.width;
+    int regionHeight = heightTwo - erosion.height;
+    BYTE* regionPtr = regionIdentification(getErosion(binaryImage, widthTwo, heightTwo, &erosion), regionWidth, regionHeight, etiketler);
+
+    saveBMP("images/regionResult.bmp", regionHeight, regionWidth, 
+        convertIntensityToBMP(regionPtr, regionWidth, regionHeight, &size));
     dout << "REGION_TEST succed!" << endl;
+#else
+    int regionWidth = widthTwo;
+    int regionHeight = heightTwo;
+    BYTE* regionPtr = regionIdentification(binaryImage, widthTwo, heightTwo, etiketler);
+
+    saveBMP("images/regionResult.bmp", heightTwo, widthTwo, 
+        convertIntensityToBMP(regionPtr, widthTwo, heightTwo, &size));
+    dout << "REGION_TEST succed!" << endl;
+#endif /* WITH_EROSION */
 #endif /* REGION_TEST */
+
+#if VARIANCE_TEST
+    dout << "variance = " << getVariance(binaryImage, 0, 0, widthTwo, heightTwo, width) << endl;
+#endif /* VARIANCE_TEST */
+
+#if MOMENT_TEST
+    int startX, startY, sizeW, sizeH;
+    int etiketCounter = 1;
+
+#if LEARN_TEST
+    objectMoments_t test;
+    test.fi[0] = 0;
+    test.fi[1] = 0;
+    test.fi[2] = 0;
+    test.fi[3] = 0;
+    test.fi[4] = 0;
+    test.fi[5] = 0;
+    test.fi[6] = 0;
+
+    //start 1 because of background value 0
+    int pcs = 0;
+    for(int j = 1; j < 255; j++){
+        getPoints(regionPtr, &startX, &startY, &sizeH, &sizeW, j, regionWidth, regionHeight);
+        if(sizeH < 1 || sizeW < 1) continue;
+
+        dout << "etiket = " << etiketCounter++ << ", value = " << j << endl;
+        for(int i = 1; i < 8; i++){
+            test.fi[i - 1] += getFi(regionPtr, i, startX, startY, sizeW, sizeH, regionWidth, j);
+            //dout << "fi " << i << " result = " << test.fi[i - 1] << endl;
+        }
+        pcs++;
+    }
+    dout << pcs << endl;
+    for(int i = 1; i < 8; i++){
+        test.fi[i - 1] /= pcs;
+        dout << "fi " << i << " result = " << test.fi[i - 1] << endl;
+    }
+#endif /* LEARN_TEST */
+#if LEARNED_TEST
+    int objectsNumber = 4;
+    objectMoments_t objects[objectsNumber];
+    objects[0].name = "mercimek"; //kırmızı
+    objects[0].fi[0] = 0.163213;
+    objects[0].fi[1] = -0.00791088;  
+    objects[0].fi[2] = 0.00411905;
+    objects[0].fi[3] = 9.22417e-05;
+    objects[0].fi[4] = 1.12648e-07;
+    objects[0].fi[5] = 1.68098e-06;
+    objects[0].fi[6] = -0.0038401;
+
+    objects[1].name = "badem"; // yeşil
+    objects[1].fi[0] = 0.18519;
+    objects[1].fi[1] = -0.0081568;
+    objects[1].fi[2] = 0.473546;
+    objects[1].fi[3] = 0.0478745;
+    objects[1].fi[4] = 0.00874992;
+    objects[1].fi[5] = 0.00383577;
+    objects[1].fi[6] = 0.0874483;
+
+    objects[2].name = "cubuk"; // mavi
+    objects[2].fi[0] = 2.26793;
+    objects[2].fi[1] = 3.27271;
+    objects[2].fi[2] = 185.63;
+    objects[2].fi[3] = 153.64;
+    objects[2].fi[4] = 68316.7;
+    objects[2].fi[5] = 292.904;
+    objects[2].fi[6] = 38286.8;
+
+    objects[3].name = "nohut"; // sarı
+    objects[3].fi[0] = 0.165108;
+    objects[3].fi[1] = 0.0129526;
+    objects[3].fi[2] = 0.0336183;
+    objects[3].fi[3] = 0.000833087;
+    objects[3].fi[4] = -3.0922e-06;
+    objects[3].fi[5] = -6.36499e-06;
+    objects[3].fi[6] = 0.0158372;
+
+    BYTE gapB = 250 / (objectsNumber + 1);
+
+    for(int j = 1; j < 255; j++){
+        getPoints(regionPtr, &startX, &startY, &sizeH, &sizeW, j, regionWidth, regionHeight);
+        if(sizeH < 1 || sizeW < 1) continue;
+
+        int isObjs[objectsNumber];
+        for(int i = 0; i < objectsNumber; i++){
+            isObjs[i] = 0;
+        }
+
+        dout << "etiket = " << setw(4) << left << etiketCounter++ << " - ";// << ", value = " << j << endl;
+        for(int i = 1; i < 8; i++){
+            double temp = getFi(regionPtr, i, startX, startY, sizeW, sizeH, regionWidth, j);
+            //dout << "fi " << i << " result = " << test.fi[i - 1] << endl;
+            double min = 1000000;
+            for(int obj = 0; obj < objectsNumber; obj++){
+                if(min > fabs(objects[obj].fi[i - 1] - temp)) min = fabs(objects[obj].fi[i - 1] - temp);
+            }
+            double epsilon = 0.00000001;
+            for(int obj = 0; obj < objectsNumber; obj++){
+                if(fabs(min - fabs(objects[obj].fi[i - 1] - temp)) <= epsilon){
+                    isObjs[obj]++;
+                    break;
+                }
+            }
+        }
+        BYTE grayColor = 0;
+        int max = isObjs[0];
+        for(int obj = 1; obj < objectsNumber; obj++){
+            if(max < isObjs[obj]){
+                max = isObjs[obj];
+            }
+        }
+        for(int obj = 0; obj < objectsNumber; obj++){
+            //max == isObjs[obj]
+            if(max == isObjs[obj]){
+                dout << setw(11) << objects[obj].name << setw(6) << " <-> " << isObjs[0] << ", " << isObjs[1] << ", " << isObjs[2] << ", " << isObjs[3] << " " <<endl;
+                grayColor = gapB * (obj + 1);
+                break;
+            }
+        }
+
+        for(int i = startX; i < startX + sizeH; i++){
+            for(int k = startY; k < startY + sizeW; k++){
+                if(*(regionPtr + i * regionWidth + k) != j) continue;
+                *(binaryImage + i * widthTwo + k) = grayColor;
+            }
+        }
+    }
+    const char* filePathResult = "images/realResult.bmp";
+    const char* filePathResultC = "images/realResultColored.bmp";
+
+    int sonEtiketler[objectsNumber];
+    for(int obj = 0; obj < objectsNumber; obj++){
+        sonEtiketler[obj] = gapB * (obj + 1);
+    }
+
+    saveBMP(filePathResultC, heightTwo, widthTwo, convertIntensityToColoredBMP(binaryImage, sonEtiketler, objectsNumber, widthTwo, heightTwo, &size));
+    saveBMP(filePathResult, heightTwo, widthTwo, convertIntensityToBMP(binaryImage, widthTwo, heightTwo, &sizeTwo));
+#endif /* LEARNED_TEST */
+#endif /* MOMENT_TEST */
+
     delete[] binaryImage;
 
     dout << "THRESHOLD_TEST succed!" << endl;
@@ -232,7 +397,7 @@ int main(int argc, char *argv[])
             }
         }
     }
-    saveBMP(filePathClustedC, height, width, convertIntensityToColoredBMP(clustedImage, allT, k, width, height, &size));
+    //saveBMP(filePathClustedC, height, width, convertIntensityToColoredBMP(clustedImage, allT, k, width, height, &size));
     saveBMP(filePathClusted, height, width, convertIntensityToBMP(clustedImage, width, height, &size));
 
     delete[] clustedImage;
@@ -399,13 +564,12 @@ int main(int argc, char *argv[])
     int i;
     for(i = 0; i < N; i++){
         //string filename = ("images/face_database/TrainingNonFaces/" + i + ".pgm");
-        ifstream file("images/face_database/TrainingFaces/1.pgm", ios::in | ios::binary);
+        ifstream file("images/face_database/TrainingFaces/28.pgm", ios::in | ios::binary);
         file.seekg(13, ios::beg);
         file.read((char *)(faces + i * (width*height)), width*height);
         file.close();
     }
     faceIntegralImages = getAllIntegralImages(faces, width, height, N);
-
 
     for(i = 0; i < M; i++){
         //const char* filename = ("images/face_database/TrainingNonFaces/" + i + ".pgm");
@@ -417,8 +581,18 @@ int main(int argc, char *argv[])
     nonFaceIntegralImages = getAllIntegralImages(nonFaces, width, height, M);
     int counter=0;
     int hModelCounter, hModelHeight, hModelWidth;
-    //TODO: hModelCounter üst sınır 6 olcak
-    
+/*
+    //manuel tests
+    for(int i = 0; i < 19; i++){
+        for(int j = 0; j < 19; j++){
+            cout << setw(5) << (int)*(faces + i * 19 + j);
+        }
+        cout << endl;
+    }
+
+    int* result = haarFeature(2, 2, 17, faceIntegralImages, width, height, N);
+    cout << "haar value = " << *(result + 0) << endl;
+*/
     for(hModelCounter = 1; hModelCounter < 6; hModelCounter++){
         for(hModelHeight = 1; hModelHeight < height; hModelHeight++){
             for(hModelWidth = 1; hModelWidth < width; hModelWidth++){

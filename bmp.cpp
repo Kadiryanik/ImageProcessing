@@ -13,6 +13,8 @@ using namespace std;
 #define LOAD_ANYWAY 0
 #define PRINTSIZE 6
 
+#define WITH_MAHALONOBIS 0
+
 #define PI 3.141592
 
 #if DEBUG
@@ -21,8 +23,10 @@ using namespace std;
 #define dout 0 && cout
 #endif
 
+static int etiketHolder = 0;
+
 /*--------------------------------------------------------------------------------------*/
-BYTE* loadBMP(int* width, int* height, long* size, ifstream &file){
+BYTE* loadBMP(int* height, int* width, long* size, ifstream &file){
     // declare bitmap structures
     BITMAPFILEHEADER bmpHead;
     BITMAPINFOHEADER bmpInfo;
@@ -94,7 +98,7 @@ BYTE* loadBMP(int* width, int* height, long* size, ifstream &file){
     return Buffer;
 }
 /*--------------------------------------------------------------------------------------*/
-int saveBMP(const char *filename, int width, int height, BYTE *data){
+int saveBMP(const char *filename, int height, int width, BYTE *data){
     BITMAPFILEHEADER bmpHead;
     BITMAPINFOHEADER bmpInfo;
     int size = width * height * 3;
@@ -222,26 +226,38 @@ BYTE* convertIntensityToBMP(BYTE* Buffer, int width, int height, long* newsize){
 } //ConvertIntensityToBMP
 /*--------------------------------------------------------------------------------------*/
 BYTE* convertIntensityToColoredBMP(BYTE* Buffer, int* allT, int k, int width, int height, long* newsize){
-    RGB_data colors[k];
+    RGB_data colors[1 + k];
     int i;
-    
-    if(k <= 3){
-        colors[0].b = 0;
-        colors[0].g = 0;
-        colors[0].r = 255;
-        colors[1].b = 0;
-        colors[1].g = 255;
-        colors[1].r = 0;
-        colors[2].b = 255;
-        colors[2].g = 0;
-        colors[2].r = 0;
-    } else{
-        dout << "Colors" << endl;
-        for(i = 0; i < k; i++){
-            colors[i].b = rand() % 255;
-            colors[i].g = rand() % 255;
-            colors[i].r = rand() % 255;
-            dout << i + 1 << "- RGB - " << (int)colors[i].r << " " << (int)colors[i].g << " " << (int)colors[i].b << endl;
+    for(i = 0; i < k; i++){
+
+        if(k <= 4){
+            colors[0].b = 0;
+            colors[0].g = 0;
+            colors[0].r = 255;
+            
+            colors[1].b = 0;
+            colors[1].g = 255;
+            colors[1].r = 0;
+            
+            colors[2].b = 255;
+            colors[2].g = 0;
+            colors[2].r = 0;
+
+            colors[3].b = 0;
+            colors[3].g = 255;
+            colors[3].r = 255;
+
+            colors[4].b = 255;
+            colors[4].g = 255;
+            colors[4].r = 255;
+        } else{
+            dout << "Colors" << endl;
+            for(i = 0; i < k; i++){
+                colors[i].b = rand() % 255;
+                colors[i].g = rand() % 255;
+                colors[i].r = rand() % 255;
+                dout << i + 1 << "- RGB - " << (int)colors[i].r << " " << (int)colors[i].g << " " << (int)colors[i].b << endl;
+            }
         }
     }
     // first make sure the parameters are valid
@@ -276,12 +292,9 @@ BYTE* convertIntensityToColoredBMP(BYTE* Buffer, int* allT, int k, int width, in
         bufpos = row * width + column;                  // position in original buffer
         newpos = (height - row - 1) * psw + column * 3; // position in padded buffer
         for(i = 0; i < k; i++){
-            if(Buffer[bufpos] <= allT[i]){
+            if(Buffer[bufpos] == allT[i]){
                 break;
             }
-        }
-        if(i == k){
-            i = k - 1;
         }
         newbuf[newpos] = colors[i].b;                //  blue
         newbuf[newpos + 1] = colors[i].g;            //  green
@@ -694,6 +707,7 @@ int* haarFeature(int hModel, int kHeight, int kWidth, const DWORD* const integra
     } else if(hModel == HAAR_MODEL_4){
         h = 3 * kHeight;  // height
         w = 1 * kWidth;   // width
+
         if(w <= width && h <= height){
             int* result = new int[ (width - w - 1) * (height - h - 1) * exampleNumber ];
             int sum, i, j, exampleCounter;
@@ -721,7 +735,7 @@ int* haarFeature(int hModel, int kHeight, int kWidth, const DWORD* const integra
         }
     } else if(hModel == HAAR_MODEL_5){
         h = 2 * kHeight;  // height
-        w = 2 * kWidth;  // width
+        w = 2 * kWidth;   // width
 
         if(w <= width && h <= height){
             int* result = new int[ (width - w - 1) * (height - h - 1) * exampleNumber ];
@@ -985,11 +999,23 @@ int thresHold(const BYTE* const ramIntensity, int width, int height){
     for(i = 0; i < width * height; i++){
             tHold[(int)*(ramIntensity + i)]++;
     }
+    double total = 0;
     for (i = 0; i < 256; i++){
         sum += i * (*(tHold + i));
+        if(*(tHold + i)) total++;
+        //cout << *(tHold + i) << ", ";
     }
     dout << endl;
-
+#if WITH_MAHALONOBIS
+    double mean = sum / 256.0;
+    double sumForVariance = 0;
+    for (i = 0; i < 256; i++){
+        sumForVariance += pow(i - mean, 2) * (*(tHold + i));
+    }
+    
+    double v2 = sumForVariance / total; // varyans^2
+    cout << "v2 = " << v2 << endl;
+#endif /* WITH_MAHALONOBIS */
     int done = 1;
     int T1 = 0, T2 = 255;
     while(done){
@@ -997,7 +1023,11 @@ int thresHold(const BYTE* const ramIntensity, int width, int height){
         float sumT1i = 0, sumT2i = 0;
 
         for(i = 0; i < 256; i++){
-            if( fabs(T1 - i) < fabs(T2 - i)){
+#if WITH_MAHALONOBIS
+            if(sqrt(pow(T1 - i, 2) / v2) < sqrt(pow(T2 - i, 2) / v2)){
+#else
+            if(fabs(T1 - i) < fabs(T2 - i)){
+#endif /* WITH_MAHALONOBIS */
                 sumT1 += i * (*(tHold + i));
                 sumT1i += *(tHold + i);
             } else{
@@ -1023,19 +1053,26 @@ int thresHold(const BYTE* const ramIntensity, int width, int height){
             T2 = T2u;
         }
     }
+#if 1
+    int min = T1;
+    for(int i = (T1 < T2 ? T1 : T2); i < (T1 < T2 ? T2 : T1); i++){
+        if(*(tHold + min) > *(tHold + i)) min = i;
+    }
     
-    thValue = (T1 + T2) / 2;
-    dout << "thValue = " << thValue << endl;
+    dout << "thValue = " << min << endl;
+    return min;
+#else
+    return (T1 + T2) / 2;
+#endif
 
-    return thValue;
 }
 /*--------------------------------------------------------------------------------------*/
 BYTE* getDilation(BYTE* binaryImage, int width, int height, mask_t* dilation){
     BYTE* resultDilation = new BYTE[(height + dilation->height) * (width + dilation->width)];
     memset(resultDilation, 255, (height + dilation->height) * (width + dilation->width));
 
-    for(int i = 0; i < height; i++){
-        for(int j = 0; j < width; j++){
+    for(int i = dilation->height / 2; i < height; i++){
+        for(int j = dilation->width / 2; j < width; j++){
             for(int row = 0; row < dilation->height; row++){
                 for(int column = 0; column < dilation->width; column++){
                     if((i - dilation->height / 2 + row) < 0 || (i - dilation->height / 2 + row) >= height || 
@@ -1054,10 +1091,10 @@ BYTE* getDilation(BYTE* binaryImage, int width, int height, mask_t* dilation){
 /*--------------------------------------------------------------------------------------*/
 BYTE* getErosion(BYTE* binaryImage, int width, int height, mask_t* erosion){
     BYTE* resultErosion = new BYTE[(height - erosion->height) * (width - erosion->width)];
-    memset(resultErosion, 255, (height + erosion->height) * (width + erosion->width));
+    memset(resultErosion, 255, (height - erosion->height) * (width - erosion->width));
 
-    for(int i = 0; i < height; i++){
-        for(int j = 0; j < width; j++){
+    for(int i = erosion->height / 2; i < height; i++){
+        for(int j = erosion->width / 2; j < width; j++){
             int erosionCounter = 0;
             for(int row = 0; row < erosion->height; row++){
                 for(int column = 0; column < erosion->width; column++){
@@ -1066,10 +1103,10 @@ BYTE* getErosion(BYTE* binaryImage, int width, int height, mask_t* erosion){
                         erosionCounter++;
                         continue;
                     }
-
                     if(*(erosion->mask + row * erosion->width + column) | *(binaryImage + (i - erosion->height / 2 + row) * width + (j - erosion->width / 2 + column))){
                         break;
                     }
+
                     erosionCounter++;
                     if(erosionCounter == erosion->width * erosion->height){
                         *(resultErosion + (i - erosion->height / 2) * (width - erosion->width) + j + erosion->width / 2) = 0;
@@ -1081,6 +1118,25 @@ BYTE* getErosion(BYTE* binaryImage, int width, int height, mask_t* erosion){
     return resultErosion;
 }
 /*--------------------------------------------------------------------------------------*/
+BYTE* getOpened(BYTE* binaryImage, int widthTwo, int heightTwo, int times){
+    mask_t opening(3, 3, 1);
+    BYTE* hold = new BYTE[widthTwo * heightTwo];
+
+    for(int i = 0; i < widthTwo * heightTwo; i++){
+        *(hold + i) = *(binaryImage + i);
+    }
+    for(int i = 0; i < times; i++){
+        hold = getErosion(hold, widthTwo, heightTwo, &opening);
+        widthTwo -= opening.width - 1;
+        heightTwo -= opening.height - 1;
+    }
+    for(int i = 0; i < times; i++){
+        hold = getDilation(hold, widthTwo, heightTwo, &opening);
+        widthTwo += opening.width - 1;
+        heightTwo += opening.height - 1;
+    }
+    return hold;
+}
 BYTE* getFrame(BYTE* binaryImage, int width, int height){
     mask_t dilation(3, 3, 1);
 
@@ -1105,7 +1161,7 @@ BYTE* regionFilling(BYTE* binaryImage, int width, int height){
 
 }
 /*--------------------------------------------------------------------------------------*/
-BYTE* regionIdentification(BYTE* binaryImage, int width, int height){
+BYTE* regionIdentification(BYTE* binaryImage, int width, int height, BYTE* returnEtiket){
     int etiket = 2;
     int* result = new int[width * height];
 
@@ -1190,6 +1246,11 @@ BYTE* regionIdentification(BYTE* binaryImage, int width, int height){
 
     //TODO: renklendirme daha detaylı yapılabilir
     int k = 240 / (etiket - 2);
+    
+    returnEtiket = new BYTE[2];
+    *(returnEtiket) = etiket - 2;
+    *(returnEtiket + 1) = k;
+
     for(int i = 0; i < width * height; i++){
         int x = *(result + i);
         if(x == 1){
@@ -1205,12 +1266,174 @@ BYTE* regionIdentification(BYTE* binaryImage, int width, int height){
     return returnResult;
 }
 /*--------------------------------------------------------------------------------------*/
+double getVariance(BYTE* binaryImage, int startX, int startY, int sizeW, int sizeH, int width){
+    double sum = 0;
+
+    for(int i = startX; i < startX + sizeH; i++){
+        for(int j = startY; j < startY + sizeW; j++){
+            if(*(binaryImage + i * width + j)){
+                sum++;
+            }
+        }
+    }
+    double mean = sum / (double)(sizeW * sizeH);
+    sum = 0;
+    for(int i = startX; i < startX + sizeH; i++){
+        for(int j = startY; j < startY + sizeW; j++){
+            BYTE holder = *(binaryImage + i * width + j);
+            //dout << setw(4) << (int)holder;
+            if(holder){
+                sum += (1 - mean) * (1 - mean);
+            }
+        }
+        //dout << endl;
+    }
+    double result = sum / (double)((sizeW * sizeH) - 1);
+#if DEBUG > 9
+    dout << "mean = " << mean << " sum = " << sum << " result = " << result << endl;
+#endif    
+    return result;
+}
+/*--------------------------------------------------------------------------------------*/
+double moment(BYTE* binaryImage, int p, int q, int startX, int startY, int sizeW, int sizeH, int width){
+    double result = 0;
+    for(int i = startX; i < startX + sizeH; i++){
+        for(int j = startY; j < startY + sizeW; j++){
+            if(*(binaryImage + i * width + j) != etiketHolder) continue;
+            
+            result += pow(i, p) * pow(j, q);
+        }
+    }
+    return result;
+}
+/*--------------------------------------------------------------------------------------*/
+double centralMoment(BYTE* binaryImage, int p, int q, int startX, int startY, int sizeW, int sizeH, int width){
+    double iMean = moment(binaryImage, 1, 0, startX, startY, sizeW, sizeH, width);
+    double jMean = moment(binaryImage, 0, 1, startX, startY, sizeW, sizeH, width);
+    double total = moment(binaryImage, 0, 0, startX, startY, sizeW, sizeH, width);
+    iMean /= total;
+    jMean /= total;
+
+    double result = 0;
+    for(int i = startX; i < startX + sizeH; i++){
+        for(int j = startY; j < startY + sizeW; j++){
+            if(*(binaryImage + i * width + j) != etiketHolder) continue;
+
+            result += pow(i - iMean, p) * pow(j - jMean, q);
+        }
+    }
+    return result;
+}
+/*--------------------------------------------------------------------------------------*/
+double normalizedCentralMoment(BYTE* binaryImage, int p, int q, int startX, int startY, int sizeW, int sizeH, int width){
+    double cMoment = centralMoment(binaryImage, p, q, startX, startY, sizeW, sizeH, width);
+    double cMomentZero = centralMoment(binaryImage, 0, 0, startX, startY, sizeW, sizeH, width);
+    int Y = ((p + q) / 2) + 1;
+
+    return (cMoment / pow(cMomentZero, Y));
+}
+/*--------------------------------------------------------------------------------------*/
+double getFi(BYTE* binaryImage, int fiNumber, int startX, int startY, int sizeW, int sizeH, int width, int etiket){
+    double returnResult = 0;
+    etiketHolder = etiket;
+
+    if(fiNumber == 1){
+        returnResult = normalizedCentralMoment(binaryImage, 2, 0, startX, startY, sizeW, sizeH, width) 
+                        + normalizedCentralMoment(binaryImage, 0, 2, startX, startY, sizeW, sizeH, width);
+    } else if(fiNumber == 2){
+        returnResult = pow(normalizedCentralMoment(binaryImage, 2, 0, startX, startY, sizeW, sizeH, width) 
+                        - normalizedCentralMoment(binaryImage, 0, 2, startX, startY, sizeW, sizeH, width), 2)
+                        + (normalizedCentralMoment(binaryImage, 1, 1, startX, startY, sizeW, sizeH, width) * 4);
+    } else if(fiNumber == 3){
+        returnResult = pow(normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width)
+                            - (3 * normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width)), 2)
+                        + pow((3 * normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width))
+                                - normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width), 2);
+    } else if(fiNumber == 4){
+        returnResult = pow(normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width)
+                            + normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width), 2)
+                        + pow(normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width)
+                            + normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width), 2);
+    } else if(fiNumber == 5){
+        returnResult = ((normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width)
+                            - (3 * normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width)))
+                        * (normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width)
+                            + normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width))
+                        * ( (pow(normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width)
+                            + normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width), 2)) 
+                            - ( 3 * pow(normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width)
+                                    + normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width), 2)) ))
+
+                        + ((3 * normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width)
+                            - normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width))
+                        * (normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width)
+                            + normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width))
+                        * ( (3 * pow(normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width)
+                                + normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width), 2)) 
+                            - pow(normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width)
+                                + normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width), 2) ));
+    } else if(fiNumber == 6){
+        returnResult = ( (normalizedCentralMoment(binaryImage, 2, 0, startX, startY, sizeW, sizeH, width) 
+                            - normalizedCentralMoment(binaryImage, 0, 2, startX, startY, sizeW, sizeH, width))
+                        * (pow(normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width)
+                            + normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width), 2)
+                         - pow(normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width)
+                            + normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width), 2)) )
+
+                        + 4 * normalizedCentralMoment(binaryImage, 1, 1, startX, startY, sizeW, sizeH, width)
+                            * (normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width) 
+                                + normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width))
+                            * (normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width)
+                                + normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width));
+    } else if(fiNumber == 7){
+        returnResult = ((3 * normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width) 
+                            - normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width))
+                        * (normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width)
+                            + normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width))
+                        * ( pow(normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width)
+                                + normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width), 2)
+                            - (3 * pow(normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width)
+                                        + normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width), 2))))
+
+                        - (normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width) 
+                            - 3 * normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width)
+                        * (normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width)
+                            + normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width))
+                        * (3 * pow(normalizedCentralMoment(binaryImage, 3, 0, startX, startY, sizeW, sizeH, width)
+                                + normalizedCentralMoment(binaryImage, 1, 2, startX, startY, sizeW, sizeH, width), 2)
+                            - pow(normalizedCentralMoment(binaryImage, 2, 1, startX, startY, sizeW, sizeH, width)
+                                    + normalizedCentralMoment(binaryImage, 0, 3, startX, startY, sizeW, sizeH, width), 2)));
+    } else{
+        cout << "Unknown Fi!" << endl;
+    }
+    return returnResult;
+}
+/*--------------------------------------------------------------------------------------*/
+void getPoints(BYTE* binaryImage, int* startX, int* startY, int* sizeH, int* sizeW, BYTE etiket, int width, int height){
+    *startX = height; *startY = width; *sizeH = 0; *sizeW = 0;
+
+    int iMax = 0, jMax = 0;
+    for(int i = 0; i < height; i++){
+        for(int j = 0; j < width; j++){
+            if(*(binaryImage + i * width + j) == etiket){
+                if(i < *startX) *startX = i;
+                if(j < *startY) *startY = j;
+
+                if(iMax < i) iMax = i;
+                if(jMax < j) jMax = j;
+            }
+        }
+    }
+
+    *sizeH = iMax - *startX + 1;
+    *sizeW = jMax - *startY + 1;
+}
+/*--------------------------------------------------------------------------------------*/
 int* thresHoldWithK(const BYTE* const ramIntensity, int k, int width, int height){
     int* tHold = new int[ 256 ];
     int i;
 
     memset(tHold, 0, 256 * sizeof(int));
-
     int* allT = new int[k];
 
     for(i = 0; i < width * height; i++){

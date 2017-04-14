@@ -70,6 +70,11 @@ typedef struct MASK{
     }
 }mask_t;
 
+typedef struct OBJECT_MOMENTS{
+    double fi[7];
+    string name;
+}objectMoments_t;
+
 /* load-save file */
 BYTE* loadBMP(int* width, int* height, long* size, ifstream &file);
 int saveBMP(const char *filename, int width, int height, BYTE *data);
@@ -99,10 +104,19 @@ BYTE getMiddle(const BYTE* const p1, const BYTE* const p2, const BYTE* const p3)
 /* thresHold */
 int thresHoldOtsu(const BYTE* const ramIntensity, int width, int height);
 int thresHold(const BYTE* const ramIntensity, int width, int height);
+/* Morphology */
 BYTE* getDilation(BYTE* binaryImage, int width, int height, mask_t *dilation);
 BYTE* getErosion(BYTE* binaryImage, int width, int height, mask_t *erosion);
+BYTE* getOpened(BYTE* binaryImage, int widthTwo, int heightTwo, int times);
 BYTE* getFrame(BYTE* binaryImage, int width, int height);
-BYTE* regionIdentification(BYTE* binaryImage, int width, int height);
+BYTE* regionIdentification(BYTE* binaryImage, int width, int height, BYTE* returnEtiket);
+
+double getVariance(BYTE* binaryImage, int startX, int startY, int sizeW, int sizeH, int width);
+double moment(BYTE* binaryImage, int p, int q, int startX, int startY, int sizeW, int sizeH, int width);
+double centralMoment(BYTE* binaryImage, int p, int q, int startX, int startY, int sizeW, int sizeH, int width);
+double normalizedCentralMoment(BYTE* binaryImage, int p, int q, int startX, int startY, int sizeW, int sizeH, int width);
+double getFi(BYTE* binaryImage, int fiNumber, int startX, int startY, int sizeW, int sizeH, int width, int etiket);
+void getPoints(BYTE* binaryImage, int* startX, int* startY, int* sizeH, int* sizeW, BYTE etiket, int width, int height);
 
 int* thresHoldWithK(const BYTE* const ramIntensity, int k, int width, int height);
 int* getAllT(int* tHold, int k, int width, int height);
