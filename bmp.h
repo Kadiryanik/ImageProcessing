@@ -10,12 +10,6 @@ typedef unsigned char BYTE;
 typedef unsigned int DWORD;
 typedef unsigned short WORD;
 
-#define HAAR_MODEL_1 1 // 1x2
-#define HAAR_MODEL_2 2 // 2x1
-#define HAAR_MODEL_3 3 // 1x3
-#define HAAR_MODEL_4 4 // 3x1
-#define HAAR_MODEL_5 5 // 2x2
-
 /* TODO: intel dışında işlemciyle çalışılcaksa parser creater yazılcak */
 typedef struct tagBITMAPFILEHEADER{
     WORD    bfType;             // 2 /* Magic identifier */
@@ -44,11 +38,6 @@ typedef struct{
     BYTE    g;
     BYTE    r;
 } RGB_data;
-
-typedef struct HAAR_MODELS{
-    int height;
-    int width;
-} haarModels_t;
 
 typedef struct MASK{
     int width;
@@ -87,15 +76,6 @@ int drawCircle(int x, int y, int r, BYTE* ramIntensity, int width, int height);
 int drawRect(int x, int y, int rectX, int rectY, BYTE* ramIntensity, int width, int height);
 int drawElips(int x, int y, float a, float b, BYTE* ramIntensity, int width, int height);
 int drawPlus(int x, int y, int width, BYTE* ramIntensity);
-/* Integral Image */
-DWORD* getIntegralImage(BYTE* ramIntensity, int width, int height);
-DWORD* getAllIntegralImages(BYTE* examples, int width, int height, int exampleNumber);
-int getTotal(const DWORD* const integralImage, int x, int y, int lastX, int lastY, int width, int height);
-int getTotalFeature(const DWORD* const integralImage, int x, int y, int lastX, int lastY, int width, int height);
-/* Haar */
-//int* haarCascade(int hModel, int size, const DWORD* const integralImage, int width, int height);
-int* haarFeature(int hModel, int kHeight, int kWidth, const DWORD* const integralImage, int width, int height, int exampleNumber);
-void calculate(int* haarVectorFace, int* haarVectorNonFace, int N, int M);
 /* Blur */
 BYTE* blurMean(const BYTE* const noise, int widthN, int heightN);
 BYTE* blurGaussian(const BYTE* const noised, int widthN, int heightN);
@@ -110,14 +90,14 @@ BYTE* getErosion(BYTE* binaryImage, int width, int height, mask_t *erosion);
 BYTE* getOpened(BYTE* binaryImage, int widthTwo, int heightTwo, int times);
 BYTE* getFrame(BYTE* binaryImage, int width, int height);
 BYTE* regionIdentification(BYTE* binaryImage, int width, int height, BYTE* returnEtiket);
-
+/* Momemnts */
 double getVariance(BYTE* binaryImage, int startX, int startY, int sizeW, int sizeH, int width);
 double moment(BYTE* binaryImage, int p, int q, int startX, int startY, int sizeW, int sizeH, int width);
 double centralMoment(BYTE* binaryImage, int p, int q, int startX, int startY, int sizeW, int sizeH, int width);
 double normalizedCentralMoment(BYTE* binaryImage, int p, int q, int startX, int startY, int sizeW, int sizeH, int width);
-double getFi(BYTE* binaryImage, int fiNumber, int startX, int startY, int sizeW, int sizeH, int width, int etiket);
-void getPoints(BYTE* binaryImage, int* startX, int* startY, int* sizeH, int* sizeW, BYTE etiket, int width, int height);
-
+double getFi(BYTE* binaryImage, int fiNumber, int startX, int startY, int sizeW, int sizeH, int width, int label);
+void getPoints(BYTE* binaryImage, int* startX, int* startY, int* sizeH, int* sizeW, BYTE label, int width, int height);
+/* K-Means */
 int* thresHoldWithK(const BYTE* const ramIntensity, int k, int width, int height);
 int* getAllT(int* tHold, int k, int width, int height);
 /* For Debug */

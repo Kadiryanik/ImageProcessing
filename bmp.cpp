@@ -1,10 +1,11 @@
 #include <iostream>
 #include <fstream>
-#include <math.h>   //for fabs
-#include <cstring>  //for memset
-#include <iomanip> //for setw
+#include <math.h>       // for fabs
+#include <cstring>      // for memset
+#include <iomanip>      // for setw
 #include <ctime>
 #include <cstdlib>
+
 #include "bmp.h"
 
 using namespace std;
@@ -23,7 +24,7 @@ using namespace std;
 #define dout 0 && cout
 #endif
 
-static int etiketHolder = 0;
+static int labelHolder = 0;
 
 /*--------------------------------------------------------------------------------------*/
 BYTE* loadBMP(int* height, int* width, long* size, ifstream &file){
@@ -183,7 +184,7 @@ BYTE* convertBMPToIntensity(BYTE* Buffer, int width, int height){
           }
 
     return newbuf;
-}//ConvetBMPToIntensity
+}
 /*--------------------------------------------------------------------------------------*/
 BYTE* convertIntensityToBMP(BYTE* Buffer, int width, int height, long* newsize){
     // first make sure the parameters are valid
@@ -223,7 +224,7 @@ BYTE* convertIntensityToBMP(BYTE* Buffer, int width, int height, long* newsize){
     }
 
     return newbuf;
-} //ConvertIntensityToBMP
+}
 /*--------------------------------------------------------------------------------------*/
 BYTE* convertIntensityToColoredBMP(BYTE* Buffer, int* allT, int k, int width, int height, long* newsize){
     RGB_data colors[1 + k];
@@ -409,447 +410,6 @@ int drawPlus(int x, int y, int width, BYTE* ramIntensity){
     return 1;
 }
 /*--------------------------------------------------------------------------------------*/
-DWORD* getIntegralImage(BYTE* ramIntensity, int width, int height){
-    DWORD* integralImage = new DWORD[(width + 1) * (height + 1)];
-    
-    int i,j;
-    memset(integralImage, 0, (width + 1) * (height + 1) * sizeof(DWORD));
- 
-    for(i = 0; i < height; i++){
-        for(j = 0; j < width; j++){
-            *(integralImage + ((width + 1) * (i + 1)) + j + 1) = *(integralImage + ((width + 1) * (i + 1)) + j)
-                                                                + *(integralImage + ((width + 1) * i) + j + 1)
-                                                                - *(integralImage + ((width + 1) * i) + j)
-                                                                + *(ramIntensity + (width * i) + j);
-        }
-    }
-   
-    return integralImage;
-}
-/*--------------------------------------------------------------------------------------*/
-DWORD* getAllIntegralImages(BYTE* examples, int width, int height, int exampleNumber){
-    DWORD* integralImage = new DWORD[(width + 1) * (height + 1) * exampleNumber];
-    
-    int i,j;
-    memset(integralImage, 0, (width + 1) * (height + 1) * exampleNumber * sizeof(DWORD));
-    
-    DWORD* startAddr = integralImage;
-
-    int exampleCounter = 0;
-    for(exampleCounter = 0; exampleCounter < exampleNumber; exampleCounter++){    
-        for(i = 0; i < height; i++){
-            for(j = 0; j < width; j++){
-                *(integralImage + ((width + 1) * (i + 1)) + j + 1) = *(integralImage + ((width + 1) * (i + 1)) + j)
-                                                                    + *(integralImage + ((width + 1) * i) + j + 1)
-                                                                    - *(integralImage + ((width + 1) * i) + j)
-                                                                    + *(examples + (width * i) + j);
-            }
-        }
-        examples = examples + (width * height);
-        integralImage = integralImage + (width + 1) * (height + 1);
-    }
-    return startAddr;
-}
-/*--------------------------------------------------------------------------------------*/
-int getTotal(const DWORD* const integralImage, int x, int y, int lastX, int lastY, int width, int height){
-    int sum = 0;
-
-    if(x >= height || y >= width || lastX >= height || lastY >= width
-        || x < 0 || y < 0 || lastX < 0 || lastY < 0){
-        cout << "getTotal(): Out of memory area" << endl;
-        return -1;
-    }
-
-    lastX += 1;
-    lastY += 1;
-
-    sum = *(integralImage + ((width + 1) * x) + y) + *(integralImage + ((width + 1) * lastX) + lastY)
-        - *(integralImage + ((width + 1) * x) + lastY) - *(integralImage + ((width + 1) * lastX) + y);
-
-    return sum;
-}
-/*--------------------------------------------------------------------------------------*/
-int getTotalFeature(const DWORD* const integralImage, int x, int y, int lastX, int lastY, int width, int height){
-    int sum = 0;
-
-    if(x >= height || y >= width || lastX > height || lastY > width
-        || x < 0 || y < 0 || lastX < 0 || lastY < 0){
-        cout << "getTotal(): Out of memory area" << endl;
-        return -1;
-    }
-
-    sum = *(integralImage + ((width + 1) * x) + y) + *(integralImage + ((width + 1) * lastX) + lastY)
-        - *(integralImage + ((width + 1) * x) + lastY) - *(integralImage + ((width + 1) * lastX) + y);
-
-    return sum;
-}
-/*--------------------------------------------------------------------------------------*/
-#if 0
-int* haarCascade(int hModel, int size, const DWORD* const integralImage, int width, int height){
-    int w = 0, h = 0;
-    int* returnResult;
-    if(hModel == HAAR_MODEL_1){
-        w = 2 * size;  // width
-        h = 1 * size;  // height
-        h--; w--;
-
-        int* result = new int[ (width - w) * (height - h) ];
-        int sum, i, j;
-        
-        for(i = 0; i < height - h; i++){
-            for (j = 0; j < width - w; j++){
-                sum = 0;
-
-                /* leftArea */
-                sum = getTotal(integralImage, i, j, i + h, (j + (w / 2)), width, height);
-                /* rightArea */
-                sum -= getTotal(integralImage, i, (j + (w / 2)) + 1, i + h, j + w, width, height);
-
-                *(result + ((width - w) * i) + j) = sum;
-            }
-        }
-        returnResult = result;
-    } else if(hModel == HAAR_MODEL_2){
-        w = 1 * size;  // width
-        h = 2 * size;  // height
-        h--; w--;
-
-        int* result = new int[ (width - w) * (height - h) ];
-        int sum, i, j;
-        
-        for(i = 0; i < height - h; i++){
-            for (j = 0; j < width - w; j++){
-                sum = 0;
-
-                /* rupArea */
-                sum = getTotal(integralImage, i, j, i + (h / 2), j + w, width, height);
-                /* downArea */
-                sum -= getTotal(integralImage, i + (h / 2) + 1, j, i + h, j + w, width, height);
-                
-                *(result + ((width - w) * i) + j) = sum;
-            }
-        }
-        returnResult = result;
-    } else if(hModel == HAAR_MODEL_3){
-        w = 3 * size;  // width
-        h = 1 * size;  // height
-        h--; w--;
-
-        int* result = new int[ (width - w) * (height - h) ];
-        int sum, i, j;
-        
-        for(i = 0; i < height - h; i++){
-            for (j = 0; j < width - w; j++){
-                sum = 0;
-
-                /* leftArea */
-                sum = getTotal(integralImage, i, j, i + h, j + (w / 3), width, height);
-                /* rightArea */
-                sum += getTotal(integralImage, i, j + (2 * ((w + 1) / 3)), i + h, j + w, width, height);
-                /* midArea */
-                sum -= getTotal(integralImage, i, j + ((w + 1) / 3), i + h, j + (2 * ((w + 1) / 3)) - 1, width, height);
-
-                *(result + ((width - w) * i) + j) = sum;
-            }
-        }
-        returnResult = result;
-    } else if(hModel == HAAR_MODEL_4){
-        w = 1 * size;  // width
-        h = 3 * size;  // height
-        h--; w--;
-
-        int* result = new int[ (width - w) * (height - h) ];
-        int sum, i, j;
-        
-        for(i = 0; i < height - h; i++){
-            for (j = 0; j < width - w; j++){
-                sum = 0;
-
-                /* leftArea */
-                sum = getTotal(integralImage, i, j, i + (h / 3), j + w, width, height);
-                /* rightArea */
-                sum += getTotal(integralImage, i + (2 * ((h + 1) / 3)), j, i + h, j + w, width, height);
-                /* midArea */
-                sum -= getTotal(integralImage, i + ((h + 1) / 3), j, i + (2 * ((h + 1) / 3)) - 1, j + w, width, height);
-
-                *(result + ((width - w) * i) + j) = sum;
-            }
-        }
-        returnResult = result;
-    } else if(hModel == HAAR_MODEL_5){
-        w = 2 * size;  // width
-        h = 2 * size;  // height
-        h--; w--;
-
-        int* result = new int[ (width - w) * (height - h) ];
-        int sum, i, j;
-        
-        for(i = 0; i < height - h; i++){
-            for (j = 0; j < width - w; j++){
-                sum = 0;
-
-                /* left + */
-                sum = getTotal(integralImage, i, j, i + (h / 2), j + (w / 2), width, height);
-                /* right + */
-                sum += getTotal(integralImage, i + ((h + 1) / 2), j + ((w + 1) / 2), i + h, j + w, width, height);
-                /* left - */
-                sum -= getTotal(integralImage, i + ((h + 1) / 2), j, i + h, j + (w / 2), width, height);
-                /* right - */
-                sum -= getTotal(integralImage, i, j + ((w + 1) / 2), i + (h / 2), j + w, width, height);
-                
-                *(result + ((width - w) * i) + j) = sum;
-            }
-        }
-        returnResult = result;
-    } else {
-        cout << "Undefined HAAR_MODEL" << endl;
-        return NULL;
-    }
-#if DEBUG > 1
-    int i, j;
-    for(i = 0; i < PRINTSIZE; i++){
-        for(j = 0; j < PRINTSIZE; j++){
-            dout << setw (5) << *(returnResult + i * (width - w) + j) << " ";
-        }
-        dout << endl;
-    }
-#endif /* DEBUG > 1 */
-        return returnResult;
-}
-#endif
-/*--------------------------------------------------------------------------------------*/
-int* haarFeature(int hModel, int kHeight, int kWidth, const DWORD* const integralImage, int width, int height, int exampleNumber){
-    int w = 0, h = 0;
-    int* returnResult;
-    if(hModel == HAAR_MODEL_1){
-        h = 1 * kHeight;  // height
-        w = 2 * kWidth;   // width
-
-        if(w <= width && h <= height){
-            int* result = new int[ (width - w - 1) * (height - h - 1) * exampleNumber ];
-            int sum, i, j, exampleCounter;
-            
-            returnResult = result;
-            for(exampleCounter = 0; exampleCounter < exampleNumber; exampleCounter++){
-                for(i = 0; i < height - h - 1; i++){
-                    for (j = 0; j < width - w - 1; j++){
-                        sum = 0;
-
-                        /* leftArea */
-                        sum = getTotalFeature(integralImage, i, j, i + h, j + (w / 2), width, height);
-                        /* rightArea */
-                        sum -= getTotalFeature(integralImage, i, j + (w / 2), i + h, j + w, width, height);
-
-                        *(result + ((width - w - 1) * i) + j) = sum;
-                    }
-                }
-                result = result + (width - w - 1) * (height - h - 1);
-            }
-        } else{
-            returnResult = NULL;
-        }
-    } else if(hModel == HAAR_MODEL_2){
-        h = 2 * kHeight;  // height
-        w = 1 * kWidth;   // width
-
-        if(w <= width && h <= height){
-            int* result = new int[ (width - w - 1) * (height - h - 1) * exampleNumber ];
-            int sum, i, j, exampleCounter;
-
-            returnResult = result;
-            for(exampleCounter = 0; exampleCounter < exampleNumber; exampleCounter++){
-                for(i = 0; i < height - h - 1; i++){
-                    for (j = 0; j < width - w - 1; j++){
-                        sum = 0;
-
-                        /* upArea */
-                        sum = getTotalFeature(integralImage, i, j, i + (h / 2), j + w, width, height);
-                        /* downArea */
-                        sum -= getTotalFeature(integralImage, i + (h / 2), j, i + h, j + w, width, height);
-
-                        *(result + ((width - w - 1) * i) + j) = sum;
-                    }
-                }
-                result = result + (width - w - 1) * (height - h - 1);
-            }
-        } else{
-            returnResult = NULL;
-        }
-    } else if(hModel == HAAR_MODEL_3){
-        h = 1 * kHeight;  // height
-        w = 3 * kWidth;   // width
-
-        if(w <= width && h <= height){
-            int* result = new int[ (width - w - 1) * (height - h - 1) * exampleNumber ];
-            int sum, i, j, exampleCounter;
-
-            returnResult = result;
-            for(exampleCounter = 0; exampleCounter < exampleNumber; exampleCounter++){
-                for(i = 0; i < height - h - 1; i++){
-                    for (j = 0; j < width - w - 1; j++){
-                        sum = 0;
-
-                        /* leftArea */
-                        sum = getTotalFeature(integralImage, i, j, i + h, j + (w / 3), width, height);
-                        /* rightArea */
-                        sum += getTotalFeature(integralImage, i, j + (2 * (w / 3)), i + h, j + w, width, height);
-                        /* midArea */
-                        sum -= getTotalFeature(integralImage, i, j + (w / 3), i + h, j + (2 * (w / 3)), width, height);
-
-                        *(result + ((width - w - 1) * i) + j) = sum;
-                    }
-                }
-                result = result + (width - w - 1) * (height - h - 1);
-            }
-        } else{
-            returnResult = NULL;
-        }
-    } else if(hModel == HAAR_MODEL_4){
-        h = 3 * kHeight;  // height
-        w = 1 * kWidth;   // width
-
-        if(w <= width && h <= height){
-            int* result = new int[ (width - w - 1) * (height - h - 1) * exampleNumber ];
-            int sum, i, j, exampleCounter;
-
-            returnResult = result;
-            for(exampleCounter = 0; exampleCounter < exampleNumber; exampleCounter++){
-                for(i = 0; i < height - h - 1; i++){
-                    for (j = 0; j < width - w - 1; j++){
-                        sum = 0;
-
-                        /* upArea */
-                        sum = getTotalFeature(integralImage, i, j, i + (h / 3), j + w, width, height);
-                        /* downArea */
-                        sum += getTotalFeature(integralImage, i + (2 * (h / 3)), j, i + h, j + w, width, height);
-                        /* midArea */
-                        sum -= getTotalFeature(integralImage, i + (h / 3), j, i + (2 * (h / 3)), j + w, width, height);
-
-                        *(result + ((width - w - 1) * i) + j) = sum;
-                    }
-                }
-                result = result + (width - w - 1) * (height - h - 1);
-            }
-        } else{
-            returnResult = NULL;
-        }
-    } else if(hModel == HAAR_MODEL_5){
-        h = 2 * kHeight;  // height
-        w = 2 * kWidth;   // width
-
-        if(w <= width && h <= height){
-            int* result = new int[ (width - w - 1) * (height - h - 1) * exampleNumber ];
-            int sum, i, j, exampleCounter;
-
-            returnResult = result;
-            for(exampleCounter = 0; exampleCounter < exampleNumber; exampleCounter++){
-                for(i = 0; i < height - h - 1; i++){
-                    for (j = 0; j < width - w - 1; j++){
-                        sum = 0;
-
-                        /* left + */
-                        sum = getTotalFeature(integralImage, i, j, i + (h / 2), j + (w / 2), width, height);
-                        /* right + */
-                        sum += getTotalFeature(integralImage, i + (h / 2), j + (w / 2), i + h, j + w, width, height);
-                        /* left - */
-                        sum -= getTotalFeature(integralImage, i + (h / 2), j, i + h, j + (w / 2), width, height);
-                        /* right - */
-                        sum -= getTotalFeature(integralImage, i, j + (w / 2), i + (h / 2), j + w, width, height);
-                        
-                        *(result + ((width - w - 1) * i) + j) = sum;
-                    }
-                }
-                result = result + (width - w - 1) * (height - h - 1);
-            }
-        } else{
-            returnResult = NULL;
-        }
-    } else{
-        cout << "Undefined HAAR_MODEL" << endl;
-        return NULL;   
-    }
-    if(returnResult != NULL){
-#if DEBUG > 1
-    int i, j;
-    for(i = 0; i < PRINTSIZE; i++){
-        for(j = 0; j < PRINTSIZE; j++){
-            dout << setw (5) << *(returnResult + i * (width - w - 1) + j) << " ";
-        }
-        dout << endl;
-    }
-#endif /* DEBUG > 1 */
-    }
-        return returnResult;
-}
-/*--------------------------------------------------------------------------------------*/
-void calculate(int* haarVectorFace, int* haarVectorNonFace, int N, int M){
-    short *C;
-    C = new short[N + M];
-    memset(C, 1, (N + M) * sizeof(short));
-
-    //locationa göre a1 .. aN haar değerleri olucak
-    //bu değerlerin min maxına göre mean seçilir  
-    //bu fonksyona bu vectorler gelicek, bu vectorleri üretme yapılcak
-
-    float *weights;
-    weights = new float[N + M];
-    memset(weights, 1 / (N + M), (N + M) * sizeof(float));
-
-    //TODO: mean, min, max setlenicek
-    int storeCounter = 0, min, max;
-    int i, val;
-    float mean; //
-    
-    min = haarVectorFace[0];
-    max = haarVectorFace[0];
-    for(i = 0; i < N; i++){
-        if(min > haarVectorFace[i]) min = haarVectorFace[i];
-        if(max < haarVectorFace[i]) max = haarVectorFace[i];
-    }
-    mean = (min + max) / (float)N;
-
-    float storeRatingDiff[50] = { 0 };
-    float storeFaceRating[50] = { 0 };
-    float storeNonFaceRating[50] = { 0 };
-    float storeTotalError[50] = { 0 };
-    float storeLower[50] = { 0 };
-    float storeUp[50] = { 0 };
-
-    for(i = 0; i < 50; i++){
-        float minRating = mean - ((mean - min) * i) / 50.0;
-        float maxRating = mean + ((max - mean) * i) / 50.0;
-        float faceRating = 0, nonfaceRating = 0, totalError = 0;
-        
-        for(val = 1; val <= N; val++){
-            if(haarVectorFace[val] > minRating && haarVectorFace[val] < maxRating){
-                C[val] = 0;
-            }
-            faceRating += weights[val] * C[val];
-        }
-        if(faceRating < 0.05){
-            for(val = 1; val <= M; val++){
-                if(haarVectorNonFace[val] < minRating || haarVectorNonFace[val] > maxRating){
-                    C[N + val] = 0;
-                }
-                nonfaceRating += weights[N + val] * C[N + val];
-            }
-        
-            totalError = faceRating + nonfaceRating;
-            if(totalError < 0.5){
-                storeRatingDiff[storeCounter] = 1 - faceRating - nonfaceRating;
-                storeFaceRating[storeCounter] = 1 - faceRating; // 1- doğrumu ??
-                storeNonFaceRating[storeCounter] = nonfaceRating;
-                storeTotalError[storeCounter] = totalError;
-                storeLower[storeCounter] = minRating;
-                storeUp[storeCounter] = maxRating;
-
-                storeCounter++;
-            }
-        }
-    }
-    //TODO: storeRatingDiff maximum indisi geri döndür
-}
-/*--------------------------------------------------------------------------------------*/
 BYTE* blurMean(const BYTE* const noised, int widthN, int heightN){
     //int *mean = new int[3 * 3];
     //memset(mean, 1, 9 * sizeof(int));
@@ -926,8 +486,8 @@ BYTE getMiddle(const BYTE* const p1, const BYTE* const p2, const BYTE* const p3)
     int i, j;
     for(i = 0; i < 3; i++){
         array[i] = *(p1 + i);
-        array[3+i] = *(p2 + i);
-        array[6+i] = *(p3 + i);
+        array[3 + i] = *(p2 + i);
+        array[6 + i] = *(p3 + i);
     }
     
     for(j = 0; j < 8; j++){
@@ -943,7 +503,7 @@ BYTE getMiddle(const BYTE* const p1, const BYTE* const p2, const BYTE* const p3)
 }
 /*--------------------------------------------------------------------------------------*/
 int thresHoldOtsu(const BYTE* const ramIntensity, int width, int height){
-    int* tHold = new int[ 256 ];
+    int* tHold = new int[256];
     int i, pixelTotal, thValue;
     DWORD sum = 0;
     memset(tHold, 0, 256 * sizeof(int));
@@ -983,7 +543,7 @@ int thresHoldOtsu(const BYTE* const ramIntensity, int width, int height){
     dout << "thValue = " << 255 - thValue << endl;
 #if DEBUG > 1
     for(i = 0; i < 256; i++){
-        dout << *(tHold + i) << ",";
+        dout << *(tHold + i) << ", ";
     }
     dout << endl;
 #endif /* DEBUG > 1 */
@@ -1003,7 +563,6 @@ int thresHold(const BYTE* const ramIntensity, int width, int height){
     for (i = 0; i < 256; i++){
         sum += i * (*(tHold + i));
         if(*(tHold + i)) total++;
-        //cout << *(tHold + i) << ", ";
     }
     dout << endl;
 #if WITH_MAHALONOBIS
@@ -1044,7 +603,8 @@ int thresHold(const BYTE* const ramIntensity, int width, int height){
         int T1u = sumT1/sumT1i;
         int T2u = sumT2/sumT2i;
         float epsilon = 2;
-        if((fabs(T1 - T1u) < epsilon && fabs(T2 - T2u) < epsilon) || fabs(T1 - T2u) < epsilon && fabs(T2 - T1u) < epsilon){
+        if((fabs(T1 - T1u) < epsilon && fabs(T2 - T2u) < epsilon) || \
+             fabs(T1 - T2u) < epsilon && fabs(T2 - T1u) < epsilon){
             dout << "T1 = " << T1 << endl;
             dout << "T2 = " << T2 << endl;
             done = 0;
@@ -1053,7 +613,7 @@ int thresHold(const BYTE* const ramIntensity, int width, int height){
             T2 = T2u;
         }
     }
-#if 1
+#if 0
     int min = T1;
     for(int i = (T1 < T2 ? T1 : T2); i < (T1 < T2 ? T2 : T1); i++){
         if(*(tHold + min) > *(tHold + i)) min = i;
@@ -1064,7 +624,6 @@ int thresHold(const BYTE* const ramIntensity, int width, int height){
 #else
     return (T1 + T2) / 2;
 #endif
-
 }
 /*--------------------------------------------------------------------------------------*/
 BYTE* getDilation(BYTE* binaryImage, int width, int height, mask_t* dilation){
@@ -1078,7 +637,8 @@ BYTE* getDilation(BYTE* binaryImage, int width, int height, mask_t* dilation){
                     if((i - dilation->height / 2 + row) < 0 || (i - dilation->height / 2 + row) >= height || 
                        (j - dilation->width / 2 + column) < 0 || (j - dilation->width / 2 + column) >= width) continue;
 
-                    if(!(*(dilation->mask + row * dilation->width + column) | *(binaryImage + (i - dilation->height / 2 + row) * width + (j - dilation->width / 2 + column)))){
+                    if(!(*(dilation->mask + row * dilation->width + column) | *(binaryImage + \
+                        (i - dilation->height / 2 + row) * width + (j - dilation->width / 2 + column)))){
                         *(resultDilation + (i + dilation->height / 2) * (width + dilation->width) + j + dilation->width / 2) = 0;
                         break;
                     }
@@ -1103,7 +663,8 @@ BYTE* getErosion(BYTE* binaryImage, int width, int height, mask_t* erosion){
                         erosionCounter++;
                         continue;
                     }
-                    if(*(erosion->mask + row * erosion->width + column) | *(binaryImage + (i - erosion->height / 2 + row) * width + (j - erosion->width / 2 + column))){
+                    if(*(erosion->mask + row * erosion->width + column) | *(binaryImage + \
+                        (i - erosion->height / 2 + row) * width + (j - erosion->width / 2 + column))){
                         break;
                     }
 
@@ -1137,6 +698,7 @@ BYTE* getOpened(BYTE* binaryImage, int widthTwo, int heightTwo, int times){
     }
     return hold;
 }
+/*--------------------------------------------------------------------------------------*/
 BYTE* getFrame(BYTE* binaryImage, int width, int height){
     mask_t dilation(3, 3, 1);
 
@@ -1145,24 +707,17 @@ BYTE* getFrame(BYTE* binaryImage, int width, int height){
 
     for(int i = 0; i < height; i++){
         for(int j = 0; j < width; j++){
-            *(result + (i * width) + j) = (*(binaryImage + (i * width) + j) == *(rDilation + (i + dilation.height / 2) * \
-                                                                        (width + dilation.width) + j + dilation.width / 2)) ? 255 : 0;
+            *(result + (i * width) + j) = (*(binaryImage + (i * width) + j) == \
+                                           *(rDilation + (i + dilation.height / 2) * \
+                                            (width + dilation.width) + j + dilation.width / 2)) \
+                                            ? 255 : 0;
         }
     }
     return result;
 }
 /*--------------------------------------------------------------------------------------*/
-BYTE* regionFilling(BYTE* binaryImage, int width, int height){
-    BYTE* binaryImageC = new BYTE[width * height];
-    for(int i = 0; i < width * height; i++){
-        *(binaryImageC + i) = *(binaryImage + i) ? 0 : 255;
-    }
-    //TODO:? dolum yapılcak yer tespiti nasıl?
-
-}
-/*--------------------------------------------------------------------------------------*/
 BYTE* regionIdentification(BYTE* binaryImage, int width, int height, BYTE* returnEtiket){
-    int etiket = 2;
+    int label = 2;
     int* result = new int[width * height];
 
     for(int i = 0; i < width * height; i++){
@@ -1172,7 +727,7 @@ BYTE* regionIdentification(BYTE* binaryImage, int width, int height, BYTE* retur
       a b c l
       d o   */
 
-    // -1 arkaplan, 0 veri, 1 kararsız durum
+    // -1 background, 0 data, 1 unstable state
     for(int i = 0; i < height; i++){
         for(int j = 0; j < width; j++){
             if(*(result + i * width + j) != 0) continue;
@@ -1181,7 +736,7 @@ BYTE* regionIdentification(BYTE* binaryImage, int width, int height, BYTE* retur
             int hold = -3;
             int holder = -2;
 
-            //a, b, c
+            // a, b, c
             if(i - 1 >= 0){
                 for(int l = 0; l < 3; l++){
                     if(j + l - 1 < width && j + l > 0){
@@ -1193,7 +748,7 @@ BYTE* regionIdentification(BYTE* binaryImage, int width, int height, BYTE* retur
                     }
                 }
             }
-            //k, l
+            // k, l
             if(j + 2 < width){
                 for(int l = 1; l < 3; l++){
                     if(i - 2 >= 0){
@@ -1216,14 +771,14 @@ BYTE* regionIdentification(BYTE* binaryImage, int width, int height, BYTE* retur
 
             if(counter == 1) *(result + i * width + j) = holder;
             else if(counter > 1) *(result + i * width + j) = 1;
-            else if(holder != -1) *(result + i * width + j) = etiket++;
+            else if(holder != -1) *(result + i * width + j) = label++;
         }
     }
 
     for(int i = 1; i < height - 1; i++){
         for(int j = 1; j < width - 1; j++){
             if( *(result + i * width + j) == 1){
-                int min = etiket;
+                int min = label;
                 int max = 0;
 
                 for(int countI = 0; countI < 3; countI++){
@@ -1244,11 +799,11 @@ BYTE* regionIdentification(BYTE* binaryImage, int width, int height, BYTE* retur
 
     BYTE* returnResult = new BYTE[width * height];
 
-    //TODO: renklendirme daha detaylı yapılabilir
-    int k = 240 / (etiket - 2);
+    //TODO: can be edit
+    int k = 240 / (label - 2);
     
     returnEtiket = new BYTE[2];
-    *(returnEtiket) = etiket - 2;
+    *(returnEtiket) = label - 2;
     *(returnEtiket + 1) = k;
 
     for(int i = 0; i < width * height; i++){
@@ -1262,7 +817,7 @@ BYTE* regionIdentification(BYTE* binaryImage, int width, int height, BYTE* retur
         }
     }
 
-    dout << "etiket number: " << etiket - 2 << endl;
+    dout << "label number: " << label - 2 << endl;
     return returnResult;
 }
 /*--------------------------------------------------------------------------------------*/
@@ -1281,12 +836,10 @@ double getVariance(BYTE* binaryImage, int startX, int startY, int sizeW, int siz
     for(int i = startX; i < startX + sizeH; i++){
         for(int j = startY; j < startY + sizeW; j++){
             BYTE holder = *(binaryImage + i * width + j);
-            //dout << setw(4) << (int)holder;
             if(holder){
                 sum += (1 - mean) * (1 - mean);
             }
         }
-        //dout << endl;
     }
     double result = sum / (double)((sizeW * sizeH) - 1);
 #if DEBUG > 9
@@ -1299,7 +852,7 @@ double moment(BYTE* binaryImage, int p, int q, int startX, int startY, int sizeW
     double result = 0;
     for(int i = startX; i < startX + sizeH; i++){
         for(int j = startY; j < startY + sizeW; j++){
-            if(*(binaryImage + i * width + j) != etiketHolder) continue;
+            if(*(binaryImage + i * width + j) != labelHolder) continue;
             
             result += pow(i, p) * pow(j, q);
         }
@@ -1317,7 +870,7 @@ double centralMoment(BYTE* binaryImage, int p, int q, int startX, int startY, in
     double result = 0;
     for(int i = startX; i < startX + sizeH; i++){
         for(int j = startY; j < startY + sizeW; j++){
-            if(*(binaryImage + i * width + j) != etiketHolder) continue;
+            if(*(binaryImage + i * width + j) != labelHolder) continue;
 
             result += pow(i - iMean, p) * pow(j - jMean, q);
         }
@@ -1333,9 +886,9 @@ double normalizedCentralMoment(BYTE* binaryImage, int p, int q, int startX, int 
     return (cMoment / pow(cMomentZero, Y));
 }
 /*--------------------------------------------------------------------------------------*/
-double getFi(BYTE* binaryImage, int fiNumber, int startX, int startY, int sizeW, int sizeH, int width, int etiket){
+double getFi(BYTE* binaryImage, int fiNumber, int startX, int startY, int sizeW, int sizeH, int width, int label){
     double returnResult = 0;
-    etiketHolder = etiket;
+    labelHolder = label;
 
     if(fiNumber == 1){
         returnResult = normalizedCentralMoment(binaryImage, 2, 0, startX, startY, sizeW, sizeH, width) 
@@ -1409,13 +962,13 @@ double getFi(BYTE* binaryImage, int fiNumber, int startX, int startY, int sizeW,
     return returnResult;
 }
 /*--------------------------------------------------------------------------------------*/
-void getPoints(BYTE* binaryImage, int* startX, int* startY, int* sizeH, int* sizeW, BYTE etiket, int width, int height){
+void getPoints(BYTE* binaryImage, int* startX, int* startY, int* sizeH, int* sizeW, BYTE label, int width, int height){
     *startX = height; *startY = width; *sizeH = 0; *sizeW = 0;
 
     int iMax = 0, jMax = 0;
     for(int i = 0; i < height; i++){
         for(int j = 0; j < width; j++){
-            if(*(binaryImage + i * width + j) == etiket){
+            if(*(binaryImage + i * width + j) == label){
                 if(i < *startX) *startX = i;
                 if(j < *startY) *startY = j;
 
@@ -1548,32 +1101,6 @@ int* getAllT(int* tHold, int k, int width, int height){
     }
 
     return allT;
-}
-/*--------------------------------------------------------------------------------------*/
-float getDistance3d(int b, int g, int r, int i, int j, int k){
-    return sqrt( (i - b) * (i - b) + (j - g) * (j - g) + (k - r) * (k - r) );
-}
-BYTE* kMeansRGB(const BYTE* const buffer, int k, int width, int height){
-    BYTE centerB[2];
-    BYTE centerG[2];
-    BYTE centerR[2];
-    int i;
-
-    srand (time(NULL));
-    for(i = 0; i < k; i++){
-        centerB[i] = rand() % width*height;
-        centerG[i] = rand() % width*height;
-        centerR[i] = rand() % width*height;
-    }
-
-    int done = 0;
-    while(!done){
-
-        for(i = 0; i < width * height * 3; i++){
-
-        }
-    }
-
 }
 /*--------------------------------------------------------------------------------------*/
 void printStructers(BITMAPFILEHEADER h, BITMAPINFOHEADER i){
